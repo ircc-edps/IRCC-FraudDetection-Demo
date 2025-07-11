@@ -6,8 +6,6 @@ This demo provides an end-to-end solution for fraud detection with AI capabiliti
 
 - **Configurable Document Handling**: Process any document type with customizable validation rules.
 - **Azure Integration**: Triggers on document uploads to Azure Blob Storage with configurable container names.
-- **AI-Powered Analysis**: Uses Azure Document Intelligence with customizable models for data extraction.
-- **Image Processing**: Extracts images (like signatures) from documents for further analysis.
 - **Customizable Validation**: Flexible validation rules using Azure OpenAI that can be adapted for any compliance requirements.
 - **Modern UI**: React frontend with Tailwind CSS for an attractive, responsive user experience.
 - **Real-time Feedback**: Live status updates and detailed validation reports with configurable polling intervals.
