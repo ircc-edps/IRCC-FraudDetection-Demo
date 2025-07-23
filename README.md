@@ -14,6 +14,8 @@ This demo provides an end-to-end solution for fraud detection with AI capabiliti
 
 ```
 IRCC-FraudDetection-Demo/
+├── application/             # Converted PDF documents stored as image files for processing
+├── chunked/                 # Image segments created during document analysis pipeline
 ├── backend/                 # FastAPI backend service
 │   ├── main.py              # FastAPI application
 │   └── requirements.txt     # Python dependencies
@@ -45,7 +47,17 @@ IRCC-FraudDetection-Demo/
    cd IRCC-FraudDetection-Demo
    ```
 
-2. **Configure Azure Function**:
+2. **Create Required Directories**:
+   Create the necessary directories for document processing:
+
+   ```bash
+   mkdir application chunked
+   ```
+
+   - `application/`: Stores converted PDF documents as image files
+   - `chunked/`: Stores image segments created during analysis
+
+3. **Configure Azure Function**:
    Create a `local.settings.json` file:
 
    ```json
@@ -61,34 +73,34 @@ IRCC-FraudDetection-Demo/
    }
    ```
 
-3. **Install Azure Function Dependencies**:
+4. **Install Azure Function Dependencies**:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Configure Backend**:
+5. **Configure Backend**:
    Create a `.env` file in the `backend` directory:
 
    ```
    AZURE_STORAGE_CONNECTION_STRING=YOUR_STORAGE_CONNECTION_STRING
    ```
 
-5. **Install Backend Dependencies**:
+6. **Install Backend Dependencies**:
 
    ```bash
    cd backend
    pip install -r requirements.txt
    ```
 
-6. **Install Frontend Dependencies**:
+7. **Install Frontend Dependencies**:
 
    ```bash
    cd frontend
    npm install
    ```
 
-7. **Configure Frontend**:
+8. **Configure Frontend**:
    Update the endpoint URLs in `frontend/src/App.js` if needed (default is `http://localhost:8080`).
 
 ## Running the Application
