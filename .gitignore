@@ -138,6 +138,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Azure Functions
+local.settings.json
+
 # Spyder project settings
 .spyderproject
 .spyproject
