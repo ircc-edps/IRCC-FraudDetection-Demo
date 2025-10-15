@@ -5,8 +5,8 @@ import "tailwindcss/tailwind.css";
 // Configuration options that can be customized per implementation
 const CONFIG = {
   apiEndpoints: {
-    upload: "http://localhost:8000/upload",
-    status: "http://localhost:8000/status",
+    upload: "http://localhost:8080/upload",
+    status: "http://localhost:8080/status",
   },
   documentTypes: {
     supportedFormats: [".pdf"], // Add more formats as needed
@@ -404,7 +404,7 @@ export default function FormValidator() {
                           state.isDocotored ? "text-green-800" : "text-red-800"
                         }`}
                       >
-                        {state.tampered_chunks.length === 0
+                        {state.tampered_chunks && state.tampered_chunks.length === 0
                           ? "No fraud detected!"
                           : "Fraud detected!"}
                       </span>
