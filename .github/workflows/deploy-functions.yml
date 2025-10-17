@@ -39,7 +39,6 @@ jobs:
           (cd func_dist && zip -r ../functionapp.zip .)
 
       - name: Deploy using Publish Profile
-        if: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE != '' }}
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
