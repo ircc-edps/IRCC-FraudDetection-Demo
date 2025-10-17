@@ -1,0 +1,48 @@
+name: Deploy Azure Functions (Blob Trigger)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "function_app.py"
+      - "helper.py"
+      - "function_config.py"
+      - "requirements.txt"
+      - "host.json"
+      - ".github/workflows/deploy-functions.yml"
+      - "application/**"
+      - "chunked/**"
+  workflow_dispatch:
+
+env:
+  # CHANGE THIS to your Function App name in Azure
+  AZURE_FUNCTIONAPP_NAME: dev-ircc-edocs-fraud-functions
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare function package
+        run: |
+          mkdir -p func_dist
+          cp function_app.py func_dist/
+          cp helper.py func_dist/
+          cp function_config.py func_dist/
+          cp requirements.txt func_dist/
+          cp host.json func_dist/
+          # Include folders used at runtime
+          if [ -d application ]; then cp -R application func_dist/; else mkdir -p func_dist/application; fi
+          if [ -d chunked ]; then cp -R chunked func_dist/; else mkdir -p func_dist/chunked; fi
+          (cd func_dist && zip -r ../functionapp.zip .)
+
+      - name: Deploy using Publish Profile
+        if: secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE != ''
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: functionapp.zip
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+

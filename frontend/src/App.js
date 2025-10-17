@@ -2,11 +2,18 @@ import React, { useState } from "react";
 import { CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import "tailwindcss/tailwind.css";
 
+// Determine API base URL: prefer build-time env, fall back to sensible defaults
+const API_BASE =
+  process.env.REACT_APP_API_BASE ||
+  (typeof window !== "undefined" && window.location.hostname.includes("azurewebsites.net")
+    ? "https://dev-ircc-edocs-fraud-backend-web-app.azurewebsites.net"
+    : "http://localhost:8080");
+
 // Configuration options that can be customized per implementation
 const CONFIG = {
   apiEndpoints: {
-    upload: "http://localhost:8080/upload",
-    status: "http://localhost:8080/status",
+    upload: `${API_BASE}/upload`,
+    status: `${API_BASE}/status`,
   },
   documentTypes: {
     supportedFormats: [".pdf"], // Add more formats as needed
