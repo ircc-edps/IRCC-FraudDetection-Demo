@@ -23,7 +23,7 @@ jobs:
           (cd backend && zip -r ../backend.zip .)
 
       - name: Deploy using Publish Profile
-        if: secrets.AZURE_WEBAPP_PUBLISH_PROFILE_BACKEND != ''
+        if: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE_BACKEND != '' }}
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
