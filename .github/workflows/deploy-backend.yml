@@ -18,9 +18,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create deployment package
+      - name: Setup Python 3.10 for packaging
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Vendor Python dependencies
         run: |
-          (cd backend && zip -r ../backend.zip .)
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt -t backend/.python_packages/lib/site-packages
+
+      - name: Create deployment package (exclude requirements.txt)
+        run: |
+          (cd backend && zip -r ../backend.zip . -x requirements.txt)
 
       - name: Deploy using Publish Profile
         uses: azure/webapps-deploy@v3
