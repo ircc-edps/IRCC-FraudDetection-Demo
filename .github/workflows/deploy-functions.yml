@@ -42,12 +42,12 @@ jobs:
           if [ -d chunked ]; then cp -R chunked func_dist/; else mkdir -p func_dist/chunked; fi
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -t func_dist/.python_packages/lib/site-packages
-          # Exclude requirements.txt to prevent Oryx from attempting server-side builds
+          # Exclude requirements.txt to prevent server-side builds
           (cd func_dist && zip -r ../functionapp.zip . -x requirements.txt)
 
       - name: Deploy using Publish Profile
         uses: Azure/functions-action@v1
         with:
-          # Omit app-name to avoid mismatches; target site comes from publish profile
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
           package: functionapp.zip
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
