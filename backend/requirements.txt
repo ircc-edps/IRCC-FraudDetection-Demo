@@ -1,5 +1,6 @@
 fastapi
 uvicorn
 python-multipart
+python-dotenv
 azure-storage-blob
 gunicorn
