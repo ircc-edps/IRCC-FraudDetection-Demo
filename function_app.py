@@ -13,6 +13,13 @@ from PIL import Image, ImageDraw
 import io
 from helper import pdf_to_jpg, validate_file, extract_metadata
 
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+logging.getLogger("azure").setLevel(logging.WARNING)
+
 app = func.FunctionApp()
 
 # Configuration from environment variables
@@ -160,7 +167,7 @@ def analyze_document_with_openai(folder_path: str) -> Dict:
         return completion.choices[0].message.content
 
     except Exception as e:
-        logging.error(f"Error analyzing document: {str(e)}")
+        logging.exception("Error analyzing document")
         return {"error": str(e)}
 
 
@@ -200,10 +207,10 @@ def extract_analysis_data(message_content):
         return analysis_data
 
     except json.JSONDecodeError as e:
-        logging.error(f"Failed to parse JSON from OpenAI response: {e}")
+        logging.exception("Failed to parse JSON from OpenAI response")
         return {"suspicious_chunks": [], "explanation": [], "overall_risk": "low"}
     except Exception as e:
-        logging.error(f"Error extracting analysis data: {e}")
+        logging.exception("Error extracting analysis data")
         return {"suspicious_chunks": [], "explanation": [], "overall_risk": "low"}
 
 
@@ -218,7 +225,10 @@ def save_json_to_blob(
         container=container_name, blob=blob_name
     )
     blob_client.upload_blob(json.dumps(data, indent=2), overwrite=True)
-    logging.info(f"Saved JSON to {container_name}/{blob_name}")
+    logging.info(
+        "Saved JSON to blob",
+        extra={"container": container_name, "blob": blob_name},
+    )
 
 
 def upload_file_to_blob(
@@ -233,7 +243,10 @@ def upload_file_to_blob(
     )
     with open(file_path, "rb") as data:
         blob_client.upload_blob(data, overwrite=True)
-    logging.info(f"Uploaded file {file_path} to {container_name}/{blob_name}")
+    logging.info(
+        "Uploaded file to blob",
+        extra={"container": container_name, "blob": blob_name},
+    )
 
 
 @app.function_name(name="ProcessDocuments")
@@ -247,7 +260,10 @@ def upload_file_to_blob(
 )
 def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
     """Azure Function to process application and generate a fraud detection report."""
-    logging.info(f"Processing blob: {inputBlob.name}")
+    logging.info(
+        "Processing blob",
+        extra={"blob_name": inputBlob.name, "size": inputBlob.length},
+    )
 
     try:
         # Initialize Blob Service Client
@@ -263,6 +279,7 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
 
         # Store metadata in blob storage
         meta = extract_metadata(temp_pdf_path)
+        logging.debug("Extracted metadata", extra={"metadata": meta})
         # with open("pdf_metadata.json", "w") as f:
         #     json.dump(meta, f, indent=2)
 
@@ -275,10 +292,15 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         )
 
         pdf_to_jpg("temp.pdf", OUTPUT_FOLDER, dpi=300)
+        logging.debug("Converted PDF to images", extra={"output_folder": OUTPUT_FOLDER})
 
         IMAGE_PATH = os.path.join(OUTPUT_FOLDER, "page_1.jpg")
 
         chunks, dims = chunk_image(IMAGE_PATH, CHUNK_SIZE)
+        logging.debug(
+            "Chunked image",
+            extra={"chunk_count": len(chunks), "chunk_size": CHUNK_SIZE},
+        )
 
         # Assuming the first page is the one we want to analyze
         IMAGE_PATH = os.path.join(OUTPUT_FOLDER, "page_1.jpg")
@@ -294,6 +316,7 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         # 2. Pass the image chunks to the model
         folder_path = "chunked"
         openai_response = analyze_document_with_openai(folder_path)
+        logging.debug("Received OpenAI response", extra={"length": len(str(openai_response))})
 
         # print(f"OpenAI response: {openai_response}")
 
@@ -305,7 +328,10 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         analysis_data = extract_analysis_data(openai_response)
 
         tampered_chunks = analysis_data.get("suspicious_chunks", [])
-        print(f"Tampered chunks identified: {tampered_chunks}")
+        logging.info(
+            "Tampered chunks identified",
+            extra={"tampered_chunks": tampered_chunks},
+        )
 
         overlay_boxes(IMAGE_PATH, tampered_chunks=tampered_chunks, dims=dims)
 
@@ -339,10 +365,10 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         save_json_to_blob(blob_service_client, "reports", report_blob_name, report_data)
         reportOutput.set(json.dumps(report_data, indent=2))
 
-        logging.info(f"Successfully processed {inputBlob.name}")
+        logging.info("Successfully processed blob", extra={"blob_name": inputBlob.name})
 
     except Exception as e:
-        logging.error(f"Error processing {inputBlob.name}: {str(e)}")
+        logging.exception("Error processing blob", extra={"blob_name": inputBlob.name})
         report_data = {
             "form_id": inputBlob.name,
             "status": "error",
