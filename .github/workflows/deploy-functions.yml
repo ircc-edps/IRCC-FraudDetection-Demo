@@ -20,7 +20,7 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     env:
       # Map secrets to env if needed later without referencing secrets in expressions
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
