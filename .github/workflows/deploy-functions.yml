@@ -46,12 +46,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip download -r requirements.txt -d func_build/wheels
           python - <<'PY'
-from pathlib import Path
-source_lines = Path("requirements.txt").read_text().splitlines()
-filtered = [line for line in source_lines if line.strip() and not line.strip().startswith(("#", "--no-index", "--find-links"))]
-output_lines = ["--no-index", "--find-links ./wheels", *filtered]
-Path("func_build/requirements.txt").write_text("\n".join(output_lines) + "\n")
-PY
+            from pathlib import Path
+            source_lines = Path("requirements.txt").read_text().splitlines()
+            filtered = [
+                line for line in source_lines
+                if line.strip() and not line.strip().startswith(("#", "--no-index", "--find-links"))
+            ]
+            output_lines = ["--no-index", "--find-links ./wheels", *filtered]
+            Path("func_build/requirements.txt").write_text("\n".join(output_lines) + "\n")
+          PY
 
       - name: Deploy using Functions Action (Publish Profile)
         uses: Azure/functions-action@v1
