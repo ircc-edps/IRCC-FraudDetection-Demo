@@ -39,11 +39,7 @@ jobs:
         run: |
           rm -rf func_build
           mkdir -p func_build
-          cp function_app.py func_build/
-          cp helper.py func_build/
-          cp function_config.py func_build/
-          cp host.json func_build/
-          cp requirements.txt func_build/
+          cp function_app.py helper.py function_config.py host.json requirements.txt func_build/
           if [ -d application ]; then cp -R application func_build/; else mkdir -p func_build/application; fi
           if [ -d chunked ]; then cp -R chunked func_build/; else mkdir -p func_build/chunked; fi
           rm -rf func_build/.python_packages
@@ -55,3 +51,6 @@ jobs:
           package: func_build
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
           remote-build: true
+          scm-do-build-during-deployment: true
+          enable-oryx-build: true
+          clean: true
