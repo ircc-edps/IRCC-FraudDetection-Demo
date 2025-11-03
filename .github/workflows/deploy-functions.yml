@@ -43,6 +43,15 @@ jobs:
           if [ -d application ]; then cp -R application func_build/; else mkdir -p func_build/application; fi
           if [ -d chunked ]; then cp -R chunked func_build/; else mkdir -p func_build/chunked; fi
           rm -rf func_build/.python_packages
+          python -m pip install --upgrade pip
+          python -m pip download -r requirements.txt -d func_build/wheels
+          python - <<'PY'
+from pathlib import Path
+source_lines = Path("requirements.txt").read_text().splitlines()
+filtered = [line for line in source_lines if line.strip() and not line.strip().startswith(("#", "--no-index", "--find-links"))]
+output_lines = ["--no-index", "--find-links ./wheels", *filtered]
+Path("func_build/requirements.txt").write_text("\n".join(output_lines) + "\n")
+PY
 
       - name: Deploy using Functions Action (Publish Profile)
         uses: Azure/functions-action@v1
@@ -53,4 +62,3 @@ jobs:
           remote-build: true
           scm-do-build-during-deployment: true
           enable-oryx-build: true
-          clean: true
