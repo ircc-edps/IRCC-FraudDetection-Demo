@@ -71,7 +71,7 @@ def startup_event():
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    logger.info("Received upload request", extra={"filename": file.filename})
+    logger.info("Received upload request", extra={"file_name": file.filename})
     try:
         # Check if file has allowed extension
         file_ext = os.path.splitext(file.filename)[1].lower()
@@ -79,7 +79,7 @@ async def upload_file(file: UploadFile = File(...)):
             allowed_formats = ", ".join(ALLOWED_FILE_EXTENSIONS)
             logger.warning(
                 "Rejected upload due to invalid format",
-                extra={"filename": file.filename, "allowed_formats": allowed_formats},
+                extra={"file_name": file.filename, "allowed_formats": allowed_formats},
             )
             raise HTTPException(
                 status_code=400, detail=f"Only {allowed_formats} files are allowed."
@@ -95,19 +95,19 @@ async def upload_file(file: UploadFile = File(...)):
             )
             logger.debug(
                 "Reading upload content",
-                extra={"filename": file.filename},
+                extra={"file_name": file.filename},
             )
             content = await file.read()
             logger.info(
                 "Uploading file to blob storage",
-                extra={"filename": file.filename, "bytes": len(content)},
+                extra={"file_name": file.filename, "bytes": len(content)},
             )
             blob_client.upload_blob(content, overwrite=True)
-            logger.info("Upload successful", extra={"filename": file.filename})
+            logger.info("Upload successful", extra={"file_name": file.filename})
             return {"filename": file.filename}
         except Exception as e:
             logger.exception(
-                "Error uploading file", extra={"filename": file.filename}
+                "Error uploading file", extra={"file_name": file.filename}
             )
             raise HTTPException(
                 status_code=500, detail=f"Error uploading file: {str(e)}"
@@ -115,7 +115,7 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         if not isinstance(e, HTTPException):
             logger.exception(
-                "Unexpected error handling upload", extra={"filename": file.filename}
+                "Unexpected error handling upload", extra={"file_name": file.filename}
             )
             raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
         else:
@@ -124,7 +124,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.get("/status/{filename}")
 def get_status(filename: str):
-    logger.info("Checking status", extra={"filename": filename})
+    logger.info("Checking status", extra={"file_name": filename})
     report_blob_name = filename.replace(".pdf", "_report.json")
     try:
         blob_client = blob_service_client.get_blob_client(
@@ -132,14 +132,14 @@ def get_status(filename: str):
         )
         try:
             data = blob_client.download_blob().readall()
-            logger.info("Found report", extra={"filename": filename})
+            logger.info("Found report", extra={"file_name": filename})
             return JSONResponse(content={"ready": True, "report": data.decode()})
         except Exception as e:
             logger.info(
                 "Report not ready yet",
-                extra={"filename": filename, "reason": str(e)},
+                extra={"file_name": filename, "reason": str(e)},
             )
             return JSONResponse(content={"ready": False})
     except Exception as e:
-        logger.exception("Error checking status", extra={"filename": filename})
+        logger.exception("Error checking status", extra={"file_name": filename})
         return JSONResponse(content={"ready": False, "error": str(e)})
