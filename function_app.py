@@ -4,6 +4,7 @@ import logging
 import base64
 from typing import Dict, List
 from azure.storage.blob import BlobServiceClient
+from azure.core.exceptions import ResourceExistsError
 from openai import AzureOpenAI
 from datetime import datetime
 import uuid
@@ -31,6 +32,20 @@ API_VERSION = os.environ.get("API_VERSION")
 
 CHUNK_SIZE = 150  # Size of each chunk in pixels
 OUTPUT_FOLDER = "application"
+
+
+def ensure_blob_container(blob_service_client: BlobServiceClient, container_name: str):
+    """Create the container if it does not already exist."""
+    container_client = blob_service_client.get_container_client(container_name)
+    try:
+        container_client.create_container()
+        logging.debug("Created blob container", extra={"container": container_name})
+    except ResourceExistsError:
+        logging.debug(
+            "Blob container already exists",
+            extra={"container": container_name},
+        )
+    return container_client
 
 
 # Chunk it in horizontal strips
@@ -167,8 +182,18 @@ def analyze_document_with_openai(folder_path: str) -> Dict:
         return completion.choices[0].message.content
 
     except Exception as e:
-        logging.exception("Error analyzing document")
-        return {"error": str(e)}
+        logging.exception(
+            "Error analyzing document with Azure OpenAI",
+            extra={
+                "endpoint": AZURE_OPENAI_ENDPOINT,
+                "deployment": AZURE_OPENAI_DEPLOYMENT,
+            },
+        )
+        return {
+            "error": f"{type(e).__name__}: {e}",
+            "endpoint": AZURE_OPENAI_ENDPOINT,
+            "deployment": AZURE_OPENAI_DEPLOYMENT,
+        }
 
 
 def extract_analysis_data(message_content):
@@ -260,9 +285,14 @@ def upload_file_to_blob(
 )
 def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
     """Azure Function to process application and generate a fraud detection report."""
+    operation_id = str(uuid.uuid4())
     logging.info(
         "Processing blob",
-        extra={"blob_name": inputBlob.name, "size": inputBlob.length},
+        extra={
+            "blob_name": inputBlob.name,
+            "size": inputBlob.length,
+            "operation_id": operation_id,
+        },
     )
 
     try:
@@ -270,12 +300,26 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         blob_service_client = BlobServiceClient.from_connection_string(
             STORAGE_CONNECTION_STRING
         )
+        for container in ("metadata", "overlay-images", "reports"):
+            ensure_blob_container(blob_service_client, container)
+            logging.debug(
+                "Verified blob container",
+                extra={"container": container, "operation_id": operation_id},
+            )
 
         pdf_data = inputBlob.read()
+        logging.debug(
+            "Read PDF data from input blob",
+            extra={"blob_name": inputBlob.name, "bytes": len(pdf_data), "operation_id": operation_id},
+        )
 
         temp_pdf_path = "temp.pdf"
         with open(temp_pdf_path, "wb") as f:
             f.write(pdf_data)
+        logging.debug(
+            "Persisted inbound PDF to temp file",
+            extra={"temp_path": temp_pdf_path, "operation_id": operation_id},
+        )
 
         # Store metadata in blob storage
         meta = extract_metadata(temp_pdf_path)
@@ -299,7 +343,11 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         chunks, dims = chunk_image(IMAGE_PATH, CHUNK_SIZE)
         logging.debug(
             "Chunked image",
-            extra={"chunk_count": len(chunks), "chunk_size": CHUNK_SIZE},
+            extra={
+                "chunk_count": len(chunks),
+                "chunk_size": CHUNK_SIZE,
+                "operation_id": operation_id,
+            },
         )
 
         # Assuming the first page is the one we want to analyze
@@ -308,6 +356,10 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         # Save each chunk as a separate image file
         for i, chunk in enumerate(chunks):
             chunk.save(f"./chunked/chunk_{i}.png")
+        logging.debug(
+            "Saved chunked images to disk",
+            extra={"chunk_count": len(chunks), "folder": "chunked", "operation_id": operation_id},
+        )
 
         # print(
         #     f"Image has been broken into {len(chunks)} chunks and saved as separate files."
@@ -315,6 +367,15 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
 
         # 2. Pass the image chunks to the model
         folder_path = "chunked"
+        logging.info(
+            "Invoking Azure OpenAI",
+            extra={
+                "operation_id": operation_id,
+                "endpoint": AZURE_OPENAI_ENDPOINT,
+                "deployment": AZURE_OPENAI_DEPLOYMENT,
+                "chunk_count": len(chunks),
+            },
+        )
         openai_response = analyze_document_with_openai(folder_path)
         logging.debug("Received OpenAI response", extra={"length": len(str(openai_response))})
 
@@ -323,6 +384,10 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         if isinstance(openai_response, dict) and "error" in openai_response:
             logging.error(f"OpenAI analysis failed: {openai_response['error']}")
             raise RuntimeError(f"OpenAI analysis failed: {openai_response['error']}")
+        logging.info(
+            "Azure OpenAI call completed",
+            extra={"operation_id": operation_id},
+        )
 
         # Extract and parse the analysis data
         analysis_data = extract_analysis_data(openai_response)
@@ -330,7 +395,7 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         tampered_chunks = analysis_data.get("suspicious_chunks", [])
         logging.info(
             "Tampered chunks identified",
-            extra={"tampered_chunks": tampered_chunks},
+            extra={"tampered_chunks": tampered_chunks, "operation_id": operation_id},
         )
 
         overlay_boxes(IMAGE_PATH, tampered_chunks=tampered_chunks, dims=dims)
@@ -345,6 +410,13 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
             overlay_blob_name,
             "overlay_image.png",
         )
+        logging.info(
+            "Uploaded overlay image",
+            extra={
+                "operation_id": operation_id,
+                "overlay_blob": overlay_blob_name,
+            },
+        )
 
         # Prepare report JSON
         report_data = {
@@ -353,6 +425,7 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
             "blob_name": inputBlob.name,
             "timestamp": datetime.utcnow().isoformat(),
             "request_id": str(uuid.uuid4()),
+            "operation_id": operation_id,
             "overlay_image_url": f"https://{blob_service_client.account_name}.blob.core.windows.net/overlay-images/{overlay_blob_name}",
             "tampered_chunks": tampered_chunks,
             "response": analysis_data,
@@ -365,10 +438,16 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
         save_json_to_blob(blob_service_client, "reports", report_blob_name, report_data)
         reportOutput.set(json.dumps(report_data, indent=2))
 
-        logging.info("Successfully processed blob", extra={"blob_name": inputBlob.name})
+        logging.info(
+            "Successfully processed blob",
+            extra={"blob_name": inputBlob.name, "operation_id": operation_id},
+        )
 
     except Exception as e:
-        logging.exception("Error processing blob", extra={"blob_name": inputBlob.name})
+        logging.exception(
+            "Error processing blob",
+            extra={"blob_name": inputBlob.name, "operation_id": operation_id},
+        )
         report_data = {
             "form_id": inputBlob.name,
             "status": "error",
@@ -376,6 +455,7 @@ def process_documents(inputBlob: func.InputStream, reportOutput: func.Out[str]):
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat(),
             "request_id": str(uuid.uuid4()),
+            "operation_id": operation_id,
         }
         report_blob_name = inputBlob.name.replace("documents/", "").replace(
             ".pdf", "_report.json"
