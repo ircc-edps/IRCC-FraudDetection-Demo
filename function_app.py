@@ -100,10 +100,18 @@ def overlay_boxes(image_path, tampered_chunks: List[int], dims: List[tuple]):
 def analyze_document_with_openai(folder_path: str) -> Dict:
     """Analyze the document using Azure OpenAI."""
     try:
+        # Log configuration for debugging
+        logging.info(f"Initializing Azure OpenAI client:")
+        logging.info(f"  Endpoint: {AZURE_OPENAI_ENDPOINT}")
+        logging.info(f"  Deployment: {AZURE_OPENAI_DEPLOYMENT}")
+        logging.info(f"  API Version: {API_VERSION}")
+
+        # Initialize client with reduced retries
         client = AzureOpenAI(
             azure_endpoint=AZURE_OPENAI_ENDPOINT,
             api_key=AZURE_OPENAI_KEY,
             api_version=API_VERSION,
+            max_retries=2,  # Reduce retries to fail faster if there's an issue
         )
 
         chat_prompt = [
@@ -145,9 +153,14 @@ def analyze_document_with_openai(folder_path: str) -> Dict:
         messages = chat_prompt
 
         # Iterate through each file in the folder
+        image_count = 0
+        total_size = 0
         for filename in os.listdir(folder_path):
             if filename.endswith((".png", ".jpg", ".jpeg")):
                 image_path = os.path.join(folder_path, filename)
+                file_size = os.path.getsize(image_path)
+                total_size += file_size
+
                 encoded_image = base64.b64encode(open(image_path, "rb").read()).decode(
                     "ascii"
                 )
@@ -165,6 +178,10 @@ def analyze_document_with_openai(folder_path: str) -> Dict:
                         ],
                     }
                 )
+                image_count += 1
+                logging.debug(f"Added image {filename} (size: {file_size/1024:.2f}KB)")
+
+        logging.info(f"Sending {image_count} images to Azure OpenAI (total size: {total_size/1024/1024:.2f}MB)")
 
         # Generate the completion
         completion = client.chat.completions.create(
@@ -179,20 +196,26 @@ def analyze_document_with_openai(folder_path: str) -> Dict:
             stream=False,
         )
 
+        logging.info("Successfully received response from Azure OpenAI")
         return completion.choices[0].message.content
 
     except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
         logging.exception(
-            "Error analyzing document with Azure OpenAI",
+            f"Error analyzing document with Azure OpenAI: {error_msg}",
             extra={
                 "endpoint": AZURE_OPENAI_ENDPOINT,
                 "deployment": AZURE_OPENAI_DEPLOYMENT,
+                "api_version": API_VERSION,
+                "error_type": type(e).__name__,
+                "error_details": str(e),
             },
         )
         return {
-            "error": f"{type(e).__name__}: {e}",
+            "error": error_msg,
             "endpoint": AZURE_OPENAI_ENDPOINT,
             "deployment": AZURE_OPENAI_DEPLOYMENT,
+            "api_version": API_VERSION,
         }
 
 
